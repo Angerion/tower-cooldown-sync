@@ -3,12 +3,13 @@
   import Timeline from './lib/Timeline.svelte'
 
   let timers = $state([
-    { id: 1, name: "Black Hole", cooldown: 60, duration: 35, offset: 0 },
-    { id: 2, name: "Chrono Field", cooldown: 90, duration: 34, offset: 0 }
+    { id: 1, name: "Black Hole", cooldown: 60, duration: 32, offset: 0 },
+    { id: 2, name: "Chrono Field", cooldown: 120, duration: 36, offset: 30 },
+    { id: 3, name: "Golden Tower", cooldown: 120, duration: 50, offset: 0 }
   ]);
 
-  let nextId = $state(3);
-  let customTimelineLength = $state(null);
+  let nextId = $state(4);
+  let customTimelineLength = $state(600);
 
   function addTimer() {
     const newId = nextId++;
@@ -78,7 +79,7 @@
 
   .container {
     display: grid;
-    grid-template-columns: 400px 1fr;
+    grid-template-columns: 1fr;
     gap: 2rem;
     align-items: start;
   }
@@ -88,11 +89,5 @@
     margin-top: 0;
     margin-bottom: 1rem;
     font-size: 1.5rem;
-  }
-
-  @media (max-width: 1024px) {
-    .container {
-      grid-template-columns: 1fr;
-    }
   }
 </style>

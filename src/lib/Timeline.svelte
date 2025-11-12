@@ -270,12 +270,28 @@
   
   // Color palette for different timers
   const colors = [
-    '#646cff', '#ff3e3e', '#4ade80', '#facc15', '#a78bfa', 
+    '#646cff', '#ff3e3e', '#facc15', '#4ade80', '#a78bfa', 
     '#fb923c', '#ec4899', '#14b8a6', '#f87171', '#34d399'
+  ];
+  
+  // Overlap color palette (avoiding yellow which is used for Golden Tower)
+  const overlapColors = [
+    '#ec4899', // pink
+    '#14b8a6', // teal
+    '#fb923c', // orange
+    '#a78bfa', // purple
+    '#f87171', // light red
+    '#34d399', // light green
+    '#8b5cf6', // violet
+    '#06b6d4', // cyan
   ];
   
   function getTimerColor(timerId) {
     return colors[(timerId - 1) % colors.length];
+  }
+  
+  function getOverlapColor(index) {
+    return overlapColors[index % overlapColors.length];
   }
   
   // Get combination label
@@ -378,7 +394,7 @@
     {/each}
     
     {#if timers.length >= 2}
-      {#each Object.entries(allOverlapsByCombo).sort((a, b) => b[0].split(',').length - a[0].split(',').length) as [comboKey, regions]}
+      {#each Object.entries(allOverlapsByCombo).sort((a, b) => b[0].split(',').length - a[0].split(',').length) as [comboKey, regions], index}
         {#if regions.length > 0}
           <div class="timer-row overlap-row">
             <div class="timer-label overlap-label">
@@ -393,6 +409,8 @@
                   style="
                     left: {(overlap.start / timelineLength) * 100}%;
                     width: {((overlap.end - overlap.start) / timelineLength) * 100}%;
+                    background-color: {getOverlapColor(index)};
+                    border-color: {getOverlapColor(index)};
                   "
                   title="{getComboLabel(overlap.timerIds)}: {overlap.start}s - {overlap.end}s"
                 >
@@ -581,10 +599,6 @@
     flex-shrink: 0;
   }
 
-  .overlap-label {
-    color: #facc15;
-  }
-
   .timer-track {
     flex: 1;
     height: 32px;
@@ -613,10 +627,9 @@
     position: absolute;
     top: 0;
     height: 100%;
-    background: #facc15;
     border-radius: 4px;
     opacity: 0.7;
-    border: 2px solid #fbbf24;
+    border: 2px solid;
   }
 
   .overlap-event:hover {
@@ -627,6 +640,10 @@
     margin-top: 1.5rem;
     padding-top: 1rem;
     border-top: 1px solid #444;
+  }
+
+  .overlap-label {
+    font-style: italic;
   }
 
   .special-overlap-row {
