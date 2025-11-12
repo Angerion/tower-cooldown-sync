@@ -43,6 +43,17 @@
             min="1"
           />
         </div>
+        
+        <div class="control-group">
+          <label for="offset-{timer.id}">Start Offset (s)</label>
+          <input
+            id="offset-{timer.id}"
+            type="number"
+            value={timer.offset}
+            oninput={(e) => updateTimer(timer.id, 'offset', Math.max(0, parseInt(e.target.value) || 0))}
+            min="0"
+          />
+        </div>
       </div>
     </div>
   {/each}
@@ -113,7 +124,7 @@
 
   .timer-controls {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 1rem;
   }
 

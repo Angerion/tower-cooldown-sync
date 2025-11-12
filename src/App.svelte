@@ -3,8 +3,8 @@
   import Timeline from './lib/Timeline.svelte'
 
   let timers = $state([
-    { id: 1, name: "Black Hole", cooldown: 60, duration: 35 },
-    { id: 2, name: "Chrono Field", cooldown: 90, duration: 34 }
+    { id: 1, name: "Black Hole", cooldown: 60, duration: 35, offset: 0 },
+    { id: 2, name: "Chrono Field", cooldown: 90, duration: 34, offset: 0 }
   ]);
 
   let nextId = $state(3);
@@ -16,7 +16,8 @@
       id: newId, 
       name: `Timer ${newId}`, 
       cooldown: 60, 
-      duration: 30 
+      duration: 30,
+      offset: 0
     }];
   }
   

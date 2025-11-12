@@ -34,7 +34,7 @@
   // Generate timeline events for each timer
   function getTimelineEvents(timer, maxTime) {
     const events = [];
-    let currentTime = 0;
+    let currentTime = timer.offset || 0;
     
     while (currentTime < maxTime) {
       events.push({
@@ -165,6 +165,41 @@
       ? allOverlapsByCombo[totalOverlapKey] 
       : []
   );
+  
+  // Special overlap: Black Hole OR Chrono Field (at least one active)
+  let bhOrCfOverlap = $derived.by(() => {
+    const bhTimer = timers.find(t => t.name === "Black Hole");
+    const cfTimer = timers.find(t => t.name === "Chrono Field");
+    
+    if (!bhTimer || !cfTimer) return [];
+    
+    const bhEvents = getTimelineEvents(bhTimer, timelineLength);
+    const cfEvents = getTimelineEvents(cfTimer, timelineLength);
+    
+    // Merge all BH and CF events into a single timeline
+    const allBhCfEvents = [...bhEvents, ...cfEvents].sort((a, b) => a.start - b.start);
+    
+    // Merge overlapping/adjacent intervals
+    const merged = [];
+    if (allBhCfEvents.length === 0) return [];
+    
+    let current = { start: allBhCfEvents[0].start, end: allBhCfEvents[0].end };
+    
+    for (let i = 1; i < allBhCfEvents.length; i++) {
+      const event = allBhCfEvents[i];
+      if (event.start <= current.end) {
+        // Overlapping or adjacent, merge
+        current.end = Math.max(current.end, event.end);
+      } else {
+        // No overlap, push current and start new
+        merged.push({ ...current, timerIds: [bhTimer.id, cfTimer.id] });
+        current = { start: event.start, end: event.end };
+      }
+    }
+    merged.push({ ...current, timerIds: [bhTimer.id, cfTimer.id] });
+    
+    return merged;
+  });
   
   // Calculate overlap statistics
   let totalOverlapDuration = $derived(
@@ -367,6 +402,29 @@
           </div>
         {/if}
       {/each}
+      
+      {#if bhOrCfOverlap.length > 0}
+        <div class="timer-row overlap-row special-overlap-row">
+          <div class="timer-label special-overlap-label">
+            BH or CF (Either Active)
+          </div>
+          <div class="timer-track">
+            {#each bhOrCfOverlap as overlap}
+              <div 
+                class="special-overlap-event"
+                role="img"
+                aria-label="Black Hole or Chrono Field active from {overlap.start}s to {overlap.end}s"
+                style="
+                  left: {(overlap.start / timelineLength) * 100}%;
+                  width: {((overlap.end - overlap.start) / timelineLength) * 100}%;
+                "
+                title="BH or CF: {overlap.start}s - {overlap.end}s"
+              >
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
     {/if}
   </div>
   
@@ -569,6 +627,31 @@
     margin-top: 1.5rem;
     padding-top: 1rem;
     border-top: 1px solid #444;
+  }
+
+  .special-overlap-row {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 2px dashed #a78bfa;
+  }
+
+  .special-overlap-label {
+    color: #a78bfa;
+    font-style: italic;
+  }
+
+  .special-overlap-event {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    background: #a78bfa;
+    border-radius: 4px;
+    opacity: 0.6;
+    border: 2px solid #9333ea;
+  }
+
+  .special-overlap-event:hover {
+    opacity: 0.85;
   }
 
   .empty-state {
