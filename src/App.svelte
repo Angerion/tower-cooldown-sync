@@ -8,14 +8,20 @@
   ]);
 
   let nextId = $state(3);
+  let customTimelineLength = $state(null);
 
   function addTimer() {
+    const newId = nextId++;
     timers = [...timers, { 
-      id: nextId++, 
-      name: `Timer ${nextId}`, 
+      id: newId, 
+      name: `Timer ${newId}`, 
       cooldown: 60, 
       duration: 30 
     }];
+  }
+  
+  function updateTimelineLength(length) {
+    customTimelineLength = length;
   }
 
   function removeTimer(id) {
@@ -46,7 +52,7 @@
 
     <div class="visualization">
       <h2>Timeline Visualization</h2>
-      <Timeline {timers} />
+      <Timeline {timers} {customTimelineLength} {updateTimelineLength} />
     </div>
   </div>
 </main>

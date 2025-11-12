@@ -1,9 +1,16 @@
 <script>
-  let { timers } = $props();
+  let { timers, customTimelineLength, updateTimelineLength } = $props();
   
   // Calculate the least common multiple for visualization
   function gcd(a, b) {
-    return b === 0 ? a : gcd(b, a % b);
+    a = Math.abs(a);
+    b = Math.abs(b);
+    while (b !== 0) {
+      const temp = b;
+      b = a % b;
+      a = temp;
+    }
+    return a;
   }
   
   function lcm(a, b) {
@@ -12,6 +19,10 @@
   
   // Calculate timeline parameters
   let timelineLength = $derived.by(() => {
+    if (customTimelineLength !== null && customTimelineLength > 0) {
+      return customTimelineLength;
+    }
+    
     if (timers.length === 0) return 120;
     
     // Calculate LCM of all cooldowns for a complete cycle
@@ -38,39 +49,129 @@
     return events;
   }
   
-  // Find overlapping regions
-  function findOverlaps(events) {
+  // Find all overlapping regions with timer combinations
+  function findAllOverlaps(events, timers) {
+    const allOverlaps = {};
+    
+    // For each unique combination of timers
+    const timerIds = timers.map(t => t.id);
+    
+    // Generate all combinations (2 or more timers)
+    for (let size = 2; size <= timerIds.length; size++) {
+      const combinations = getCombinations(timerIds, size);
+      
+      for (const combo of combinations) {
+        const comboKey = combo.sort((a, b) => a - b).join(',');
+        allOverlaps[comboKey] = findOverlapForTimers(events, combo);
+      }
+    }
+    
+    return allOverlaps;
+  }
+  
+  // Generate combinations of array elements
+  function getCombinations(arr, size) {
+    if (size === 1) return arr.map(x => [x]);
+    if (size > arr.length) return [];
+    
+    const result = [];
+    
+    function combine(start, combo) {
+      if (combo.length === size) {
+        result.push([...combo]);
+        return;
+      }
+      
+      for (let i = start; i < arr.length; i++) {
+        combo.push(arr[i]);
+        combine(i + 1, combo);
+        combo.pop();
+      }
+    }
+    
+    combine(0, []);
+    return result;
+  }
+  
+  // Find overlap periods for a specific set of timers
+  function findOverlapForTimers(events, timerIds) {
     const overlaps = [];
     
-    for (let i = 0; i < events.length; i++) {
-      for (let j = i + 1; j < events.length; j++) {
-        const e1 = events[i];
-        const e2 = events[j];
-        
-        // Check if events overlap
-        const overlapStart = Math.max(e1.start, e2.start);
-        const overlapEnd = Math.min(e1.end, e2.end);
-        
-        if (overlapStart < overlapEnd) {
-          overlaps.push({
-            start: overlapStart,
-            end: overlapEnd,
-            timerIds: [e1.timerId, e2.timerId]
-          });
-        }
+    // Get events for these specific timers
+    const relevantEvents = events.filter(e => timerIds.includes(e.timerId));
+    
+    // For each time point, check if all timers in the combination are active
+    const timePoints = new Set();
+    relevantEvents.forEach(e => {
+      timePoints.add(e.start);
+      timePoints.add(e.end);
+    });
+    
+    const sortedPoints = Array.from(timePoints).sort((a, b) => a - b);
+    
+    for (let i = 0; i < sortedPoints.length - 1; i++) {
+      const start = sortedPoints[i];
+      const end = sortedPoints[i + 1];
+      const midPoint = (start + end) / 2;
+      
+      // Check if all timers in this combination are active at midpoint
+      const activeTimers = new Set(
+        relevantEvents
+          .filter(e => e.start <= midPoint && e.end > midPoint)
+          .map(e => e.timerId)
+      );
+      
+      if (timerIds.every(id => activeTimers.has(id))) {
+        overlaps.push({ start, end, timerIds: [...timerIds] });
       }
     }
     
     return overlaps;
   }
   
+  // Merge overlapping intervals
+  function mergeIntervals(intervals) {
+    if (!intervals || intervals.length === 0) return [];
+    
+    // Sort intervals by start time
+    const sorted = intervals
+      .map(({start, end}) => ({start, end}))
+      .sort((a, b) => a.start - b.start);
+    
+    const merged = [];
+    let prev = sorted[0];
+    
+    for (let i = 1; i < sorted.length; i++) {
+      const curr = sorted[i];
+      if (curr.start <= prev.end) {
+        // Overlapping, merge
+        prev.end = Math.max(prev.end, curr.end);
+      } else {
+        merged.push(prev);
+        prev = curr;
+      }
+    }
+    merged.push(prev);
+    return merged;
+  }
+  
   let allEvents = $derived(timers.flatMap(timer => getTimelineEvents(timer, timelineLength)));
-  let overlapRegions = $derived(findOverlaps(allEvents));
+  let allOverlapsByCombo = $derived(findAllOverlaps(allEvents, timers));
+  
+  // Get total overlap (all timers active at once)
+  let totalOverlapKey = $derived(timers.map(t => t.id).sort((a, b) => a - b).join(','));
+  let totalOverlapRegions = $derived(
+    timers.length >= 2 && allOverlapsByCombo[totalOverlapKey] 
+      ? allOverlapsByCombo[totalOverlapKey] 
+      : []
+  );
   
   // Calculate overlap statistics
-  let totalOverlapDuration = $derived(overlapRegions.reduce((sum, overlap) => 
-    sum + (overlap.end - overlap.start), 0
-  ));
+  let totalOverlapDuration = $derived(
+    totalOverlapRegions.reduce((sum, overlap) => 
+      sum + (overlap.end - overlap.start), 0
+    )
+  );
   let overlapPercentage = $derived(
     timelineLength > 0 
       ? ((totalOverlapDuration / timelineLength) * 100).toFixed(1)
@@ -92,8 +193,10 @@
       const eventStart = event.start;
       const eventEnd = Math.min(event.end, maxTime);
       
-      // Check each second of this event
-      for (let t = eventStart; t < eventEnd; t += 0.1) {
+      // Check at 0.1 second intervals of this event
+      const steps = Math.floor((eventEnd - eventStart) * 10);
+      for (let i = 0; i < steps; i++) {
+        const t = eventStart + (i * 0.1);
         const hasOverlap = allEvents.some(e => 
           e.timerId !== timer.id && 
           e.start <= t && 
@@ -139,13 +242,29 @@
   function getTimerColor(timerId) {
     return colors[(timerId - 1) % colors.length];
   }
+  
+  // Get combination label
+  function getComboLabel(timerIds) {
+    return timerIds
+      .map(id => timers.find(t => t.id === id)?.name || `Timer ${id}`)
+      .join(' + ');
+  }
 </script>
 
 <div class="timeline-container">
   <div class="stats">
     <div class="stat-item">
       <span class="stat-label">Timeline Duration:</span>
-      <span class="stat-value">{timelineLength}s</span>
+      <div class="stat-value-editable">
+        <input
+          type="number"
+          value={timelineLength}
+          oninput={(e) => updateTimelineLength(Math.max(10, parseInt(e.target.value) || 120))}
+          min="10"
+          class="timeline-input"
+        />
+        <span>s</span>
+      </div>
     </div>
     <div class="stat-item">
       <span class="stat-label">Total Overlap Time:</span>
@@ -153,7 +272,7 @@
     </div>
     <div class="stat-item">
       <span class="stat-label">Overlap Count:</span>
-      <span class="stat-value">{overlapRegions.length}</span>
+      <span class="stat-value">{totalOverlapRegions.length}</span>
     </div>
   </div>
   
@@ -208,6 +327,8 @@
           {#each getTimelineEvents(timer, timelineLength) as event}
             <div 
               class="timer-event"
+              role="img"
+              aria-label="{timer.name} active from {event.start}s to {event.end}s"
               style="
                 left: {(event.start / timelineLength) * 100}%;
                 width: {((event.end - event.start) / timelineLength) * 100}%;
@@ -221,25 +342,31 @@
       </div>
     {/each}
     
-    {#if overlapRegions.length > 0}
-      <div class="timer-row overlap-row">
-        <div class="timer-label overlap-label">
-          Overlaps
-        </div>
-        <div class="timer-track">
-          {#each overlapRegions as overlap}
-            <div 
-              class="overlap-event"
-              style="
-                left: {(overlap.start / timelineLength) * 100}%;
-                width: {((overlap.end - overlap.start) / timelineLength) * 100}%;
-              "
-              title="Overlap: {overlap.start}s - {overlap.end}s"
-            >
+    {#if timers.length >= 2}
+      {#each Object.entries(allOverlapsByCombo).sort((a, b) => b[0].split(',').length - a[0].split(',').length) as [comboKey, regions]}
+        {#if regions.length > 0}
+          <div class="timer-row overlap-row">
+            <div class="timer-label overlap-label">
+              {getComboLabel(comboKey.split(',').map(Number))}
             </div>
-          {/each}
-        </div>
-      </div>
+            <div class="timer-track">
+              {#each regions as overlap}
+                <div 
+                  class="overlap-event"
+                  role="img"
+                  aria-label="Overlap from {overlap.start}s to {overlap.end}s"
+                  style="
+                    left: {(overlap.start / timelineLength) * 100}%;
+                    width: {((overlap.end - overlap.start) / timelineLength) * 100}%;
+                  "
+                  title="{getComboLabel(overlap.timerIds)}: {overlap.start}s - {overlap.end}s"
+                >
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      {/each}
     {/if}
   </div>
   
@@ -280,6 +407,31 @@
     font-size: 1.25rem;
     font-weight: 600;
     color: #646cff;
+  }
+
+  .stat-value-editable {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #646cff;
+  }
+
+  .timeline-input {
+    width: 80px;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid #444;
+    background: #1a1a1a;
+    color: #646cff;
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+
+  .timeline-input:focus {
+    outline: none;
+    border-color: #646cff;
   }
 
   .timer-metrics {
@@ -438,6 +590,11 @@
 
     .stat-label {
       color: #666;
+    }
+
+    .timeline-input {
+      background: white;
+      border-color: #ddd;
     }
 
     .timer-metrics h3 {

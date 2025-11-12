@@ -28,7 +28,7 @@
             id="cooldown-{timer.id}"
             type="number"
             value={timer.cooldown}
-            oninput={(e) => updateTimer(timer.id, 'cooldown', parseInt(e.target.value) || 0)}
+            oninput={(e) => updateTimer(timer.id, 'cooldown', Math.max(1, parseInt(e.target.value) || 1))}
             min="1"
           />
         </div>
@@ -39,7 +39,7 @@
             id="duration-{timer.id}"
             type="number"
             value={timer.duration}
-            oninput={(e) => updateTimer(timer.id, 'duration', parseInt(e.target.value) || 0)}
+            oninput={(e) => updateTimer(timer.id, 'duration', Math.max(1, parseInt(e.target.value) || 1))}
             min="1"
           />
         </div>
